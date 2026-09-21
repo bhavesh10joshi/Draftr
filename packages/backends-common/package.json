@@ -1,5 +1,5 @@
 {
-  "name": "ws-backend",
+  "name": "@repo/common-backend",
   "version": "1.0.0",
   "description": "",
   "main": "index.js",
@@ -8,14 +8,13 @@
     "start": "node ./dist/index.mjs",
     "dev": "npm run build &&  npm run start"
   },
+  "exports": {
+    "./config" : "./src/index.mts"
+  },
   "keywords": [],
   "devDependencies": {
     "@repo/typescript-config": "workspace:*",
-    "@repo/common-backend": "workspace:*",
-    "@types/ws": "^8.18.1",
-    "@repo/common": "workspace:*",
-    "@repo/database": "workspace:*",
-    "@repo/statuscodes" : "workspace:*"
+    "@repo/common-backend": "workspace:*"
   },
   "author": "",
   "license": "ISC",

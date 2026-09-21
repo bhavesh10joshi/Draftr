@@ -10,7 +10,11 @@
     "dev": "npm run build &&  npm run start"
   },
   "devDependencies": {
-    "@repo/typescript-config": "workspace:*"
+    "@repo/typescript-config": "workspace:*",
+    "@repo/common-backend": "workspace:*",
+    "@repo/common": "workspace:*", 
+    "@repo/database": "workspace:*",
+    "@repo/statuscodes" : "workspace:*"
   },
   "keywords": [],
   "author": "",
