@@ -165,15 +165,19 @@ app.post("/app/createRooms" , middleware , async function(req:any,res:Response)
     }
 });
 // Api Endpoint for fetching the previous chat messages
-app.get("/app/room/getChats" , middleware , async function(req:Request , res:Response)
+app.get("/chats/:roomId" , middleware , async function(req:Request , res:Response)
 {
-    const roomId:any = req.params.roomId;
+    const roomId:any = Number(req.params.roomId);
     
     try{
-        const Chats = await prisma.room.findUnique({
+        const Chats = await prisma.chat.findMany({
             where : {
-                id : roomId
-            }
+                roomId : roomId
+            },
+            orderBy : {
+                id : "desc"
+            } , 
+            take : 50
         });
         if(!Chats)
         {
@@ -194,7 +198,37 @@ app.get("/app/room/getChats" , middleware , async function(req:Request , res:Res
         });
         return ;
     }
-})
+});
+// Api endpoint for getting the roomId based on slug
+app.get("/room/:slug" , middleware , async function(req,res)
+{
+    const slug = req.params.slug;
+    try{
+        const room = await prisma.room.findFirst({
+            where:{
+                slug : slug
+            }
+        });
+        if(!room)
+        {
+            res.status(ClientErrorStatusCodes.ResourceNotFound).json({
+                msg : "Room not found !"
+            });
+            return;
+        }
+        res.status(SuccessStatusCodes.Success).json({
+            room : room 
+        });
+        return;
+    }
+    catch(e)
+    {
+        res.status(ServerErrors.InternalServerError).json({
+            msg : "Internal Server Error Occurred !"
+        });
+        return;
+    }
+});
 app.listen(5000 , function()
 {
     console.log("Listening at port 5000");
