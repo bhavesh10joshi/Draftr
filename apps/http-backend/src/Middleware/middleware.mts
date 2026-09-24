@@ -3,12 +3,13 @@ import { JWT_SECRET } from "@repo/common-backend/config";
 
 export function middleware(req:any,res:any,next:any)
 {
-    const token =  req.headers["authorization"];
+    const token =  req.headers["authorization"] || req.headers.authorization ;
+    console.log(token);
     const verification:any = jwt.verify(token , JWT_SECRET);
     
-    if(!verification)
+    if(verification)
     {
-        req.UserId = verification._id;
+        req.UserId = verification.id;
         next();
         return;
     }

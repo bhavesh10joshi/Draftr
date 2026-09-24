@@ -7,9 +7,11 @@ import {SignUpSchema , SignInSchema , CreateRoomSchema} from "@repo/common/types
 import { prisma } from "@repo/database/db"
 import {SuccessStatusCodes , ClientErrorStatusCodes , ServerErrors} from "@repo/statuscodes/statuscodes"
 import { Request , Response } from "express";
+import cors from "cors"
 
 const app = Express();
 app.use(Express.json());
+app.use(cors());
 
 // Api Endpoint for signing up into the application
 app.post("/signUp" , async function(req:Request,res:Response)
@@ -90,7 +92,9 @@ app.post("/signIn" , async function(req:Request,res:Response)
 
         if(check)
         {
-            const token = jwt.sign(SignIn.data.password , JWT_SECRET);
+            const token = jwt.sign({
+                id : findUser.id
+             } , JWT_SECRET);
             if(token)
             {
                 res.status(SuccessStatusCodes.Success).json({
@@ -144,10 +148,6 @@ app.post("/app/createRooms" , middleware , async function(req:any,res:Response)
                 adminId : UserId  
             }
         });
-        // Here i think that some sort of Websocket logic will come into 
-        // where we will somehow redirect the room name to directly to ws server , or the ws server can also directly fetch it from 
-        // the db as the PrismaClient is also exported to th ws-backend too , But at this point i have no idea
-        // Think |'_'|
         if(!MakeRoom)
         {
             res.status(ServerErrors.InternalServerError).json({
@@ -155,6 +155,10 @@ app.post("/app/createRooms" , middleware , async function(req:any,res:Response)
             });
             return;
         }
+        res.status(SuccessStatusCodes.Success).json({
+            data :MakeRoom.id
+        });
+        return;
     }
     catch(e)
     {
@@ -165,9 +169,9 @@ app.post("/app/createRooms" , middleware , async function(req:any,res:Response)
     }
 });
 // Api Endpoint for fetching the previous chat messages
-app.get("/chats/:roomId" , middleware , async function(req:Request , res:Response)
+app.get("/chats/:roomId" , async function(req:Request , res:Response)
 {
-    const roomId:any = Number(req.params.roomId);
+    const roomId:any = req.params.roomId;
     
     try{
         const Chats = await prisma.chat.findMany({
@@ -200,7 +204,7 @@ app.get("/chats/:roomId" , middleware , async function(req:Request , res:Respons
     }
 });
 // Api endpoint for getting the roomId based on slug
-app.get("/room/:slug" , middleware , async function(req,res)
+app.get("/room/:slug"  , async function(req,res)
 {
     const slug = req.params.slug;
     try{

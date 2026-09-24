@@ -9,7 +9,7 @@ export function TokenValidation(token:string) : string | undefined
         {
             return undefined;
         }
-        return decoded;
+        return decoded.id;
     }
     catch(e)
     {

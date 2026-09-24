@@ -63,7 +63,6 @@ wss.on("connection" , function connection(ws,request)
                 {
                     if(!users.rooms.includes(DataintoJson.roomId))
                     {
-                        ws.send("Joined Room "+DataintoJson.roomId);
                         return{
                             ...users , 
                             rooms : [...users.rooms , DataintoJson.roomId]
@@ -78,7 +77,6 @@ wss.on("connection" , function connection(ws,request)
             Users = Users.map((users)=>{
                 if(users.UserId == validation)
                 {
-                    ws.send("Left Room "+DataintoJson.roomId);
                     return{
                         ...users , 
                         rooms : users.rooms.filter((roomId) => roomId != DataintoJson.roomId)
@@ -94,7 +92,10 @@ wss.on("connection" , function connection(ws,request)
             Users = Users.map((users)=>{
                 if(users.rooms.includes(RoomId))
                 {
-                    users.ws.send(message);  
+                    users.ws.send(JSON.stringify({
+                        type : "Send_Message" , 
+                        message : message 
+                    }));  
                 }
                 return users;
             }); 
