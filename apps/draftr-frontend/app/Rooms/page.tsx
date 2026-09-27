@@ -1,49 +1,67 @@
 "use client";
-import { useRef , useEffect} from "react";
+import { useRef, useEffect , useState} from "react";
 import { initDraw } from "@/draw";
 
-interface PropsTypes{
-    ws : WebSocket | undefined,
-    RoomId : string
-}; 
 
-export default function Rooms(props:PropsTypes)
-{
-    const CanvasRef = useRef<HTMLCanvasElement>(null); 
+interface PropsTypes {
+  ws: WebSocket | undefined;
+  RoomId: string;
+}
 
-    useEffect(function()
-    {
-        if(CanvasRef.current)
-        {
-            const Canva = CanvasRef.current;
-            // 1. Get real display dimensions
-            const width = window.innerWidth;
-            const height = window.innerHeight;
+export default function Rooms(props: PropsTypes) {
 
-            // 2. Set the internal coordinate buffer to match the screen pixels exactly
-            Canva.width = width;
-            Canva.height = height;
+    const [selectedShape , setSelectedShape] = useState("");
+    const CanvasRef = useRef<HTMLCanvasElement>(null);
 
-            // 3. Set the CSS display size explicitly
-            Canva.style.width = `${width}px`;
-            Canva.style.height = `${height}px`;
-            initDraw(Canva , props.RoomId , props.ws);
+    useEffect(() => {
+        if (CanvasRef.current) {
+        const Canva = CanvasRef.current;
+        const width = window.innerWidth;
+        const height = window.innerHeight;
+
+        Canva.width = width;
+        Canva.height = height;
+
+        Canva.style.width = `${width}px`;
+        Canva.style.height = `${height}px`;
+        initDraw(Canva, props.RoomId, props.ws , selectedShape);
         }
-    },[CanvasRef]);
+    }, [CanvasRef , selectedShape]);
 
-    if(!props.ws)
-    {
-        console.log("Hello");
-        return<>
-            Connecting to the WebSockets ....
-        </>
+    if (!props.ws) {
+        return <>Connecting to the WebSockets ....</>;
     }
-    return<>
+
+    return (
         <div className="fixed inset-0 h-screen w-screen overflow-hidden">
-            <canvas
-                ref={CanvasRef}
-                className="block touch-none"
-            />
+        <canvas ref={CanvasRef} className="block touch-none" />
+
+        <div className="absolute bottom-4 right-4 z-10 flex gap-2">
+            <button
+            onClick={() => setSelectedShape("rect")}
+            className="px-3 py-2 bg-zinc-800 text-white text-sm rounded-lg shadow-md hover:bg-zinc-700 transition"
+            >
+                Rectangle
+            </button>
+            <button
+            onClick={() => setSelectedShape("square")}
+            className="px-3 py-2 bg-zinc-800 text-white text-sm rounded-lg shadow-md hover:bg-zinc-700 transition"
+            >
+                Square
+            </button>
+            <button
+            onClick={() => setSelectedShape("circle")}
+            className="px-3 py-2 bg-zinc-800 text-white text-sm rounded-lg shadow-md hover:bg-zinc-700 transition"
+            >
+                Circle
+            </button>
+            <button
+            onClick={() => setSelectedShape("line")}
+            className="px-3 py-2 bg-zinc-800 text-white text-sm rounded-lg shadow-md hover:bg-zinc-700 transition"
+            >
+                Line
+            </button>
         </div>
-    </>
+        </div>
+    );
 }

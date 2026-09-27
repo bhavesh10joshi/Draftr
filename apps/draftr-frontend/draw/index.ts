@@ -14,7 +14,11 @@ type ShapeInterface = {
     radius : number 
 };
 
-export async function initDraw(Canva : HTMLCanvasElement , roomId:string , ws:WebSocket | undefined)
+interface CanvasWithCleanup extends HTMLCanvasElement {
+  _drawCleanupController?: AbortController;
+}
+
+export async function initDraw(Canva : CanvasWithCleanup , roomId:string , ws:WebSocket | undefined , shape : string)
 {
     const ctx = Canva.getContext("2d"); 
     let ExistingShapes : ShapeInterface[] = await getShapes(roomId);
@@ -23,6 +27,14 @@ export async function initDraw(Canva : HTMLCanvasElement , roomId:string , ws:We
     {
         return;
     }
+
+    if (Canva._drawCleanupController) {
+        Canva._drawCleanupController.abort();
+    }
+
+    const controller = new AbortController();
+    Canva._drawCleanupController = controller;
+    const { signal } = controller;
 
     // Initial render of existing shapes
     ClearCanvas(ExistingShapes, ctx, Canva);
@@ -55,59 +67,105 @@ export async function initDraw(Canva : HTMLCanvasElement , roomId:string , ws:We
 
     Canva.addEventListener("mousedown" , (e: MouseEvent) => {
         clicked = true;
-        const rect = Canva.getBoundingClientRect();
-        // Set starting points relative to the canvas
-        StartX = e.clientX - rect.left;
-        StartY = e.clientY - rect.top;
+        StartX = e.clientX ;
+        StartY = e.clientY ;
     });
 
     Canva.addEventListener("mouseup" , (e: MouseEvent) => {
         if (!clicked) return;
         clicked = false;
-        const rect = Canva.getBoundingClientRect();
-        const currentX = e.clientX - rect.left;
-        const currentY = e.clientY - rect.top;
 
-        const width = currentX - StartX;
-        const height = currentY - StartY;
+        const width = e.clientX - StartX;
+        const height = e.clientY - StartY;
 
-        ExistingShapes.push({
-            type : "rect" , 
-            x : StartX , 
-            y : StartY , 
-            height : height , 
-            width : width
-        });
-
-        const payload = {
-            type : "Send_Message" , 
-            message : JSON.stringify({
+        if(shape == "rect")
+        {
+            ExistingShapes.push({
                 type : "rect" , 
                 x : StartX , 
                 y : StartY , 
                 height : height , 
                 width : width
-            }),
-            roomId : roomId
-        };
-        ws?.send(JSON.stringify(payload));
-        ClearCanvas(ExistingShapes, ctx, Canva);
+            });
+
+            const payload = {
+                type : "Send_Message" , 
+                message : JSON.stringify({
+                    type : "rect" , 
+                    x : StartX , 
+                    y : StartY , 
+                    height : height , 
+                    width : width
+                }),
+                roomId : roomId
+            };
+            ws?.send(JSON.stringify(payload));
+            ClearCanvas(ExistingShapes, ctx, Canva);
+        }
+        else if(shape == "circle"){
+            ExistingShapes.push({
+                type : "circle" , 
+                centerx : StartX , 
+                centery : StartY , 
+                radius : Math.hypot(width , height) 
+            });
+
+            const payload = {
+                type : "Send_Message" , 
+                message : JSON.stringify({
+                    type : "circle" , 
+                    centerx : StartX , 
+                    centery : StartY , 
+                    radius : Math.hypot(width , height) 
+                }),
+                roomId : roomId
+            };
+            ws?.send(JSON.stringify(payload));
+            ClearCanvas(ExistingShapes, ctx, Canva);
+        }
+        else if(shape == "line")
+        {
+
+        }
+        else if(shape == "square")
+        {
+
+        }
     });
 
     Canva.addEventListener("mousemove" , function(e: MouseEvent)
     {
         if(clicked)
         {
-            const rect = Canva.getBoundingClientRect();
-            const currentX = e.clientX - rect.left;
-            const currentY = e.clientY - rect.top;
-            const width = currentX - StartX;
-            const height = currentY - StartY;
+            if(shape == "rect")
+            {
+                const width = e.clientX - StartX;
+                const height = e.clientY - StartY;
 
-            ClearCanvas(ExistingShapes , ctx , Canva);
-            ctx.strokeStyle = "rgba(255 , 255 , 255)";
-            // Use strokeRect with (x, y, width, height)
-            ctx.strokeRect(StartX , StartY , width , height);
+                ClearCanvas(ExistingShapes , ctx , Canva);
+                ctx.beginPath();
+                ctx.strokeStyle = "rgba(255 , 255 , 255)";
+                ctx.strokeRect(StartX , StartY , width , height);
+                ctx.beginPath();
+            }
+            else if(shape == "circle")
+            {
+                ClearCanvas(ExistingShapes, ctx, Canva);
+                ctx.beginPath();
+                ctx.strokeStyle = "rgba(255, 255, 255)"
+                const radius = Math.hypot(e.clientX - StartX, e.clientY - StartY);
+                ctx.arc(StartX , StartY , radius , 0, 2 * Math.PI);
+                ctx.stroke();
+                ctx.beginPath();
+            }
+            else if(shape == "square")
+            {
+
+            }
+            else
+            {
+
+            }
         }
     });
 }
@@ -121,9 +179,17 @@ function ClearCanvas(ExistingShapes:ShapeInterface[] , ctx : CanvasRenderingCont
     ExistingShapes.forEach((shape) => {
         if(shape.type == "rect")
         {
+            ctx.beginPath();
             ctx.strokeStyle = "rgba(255 , 255 , 255)";
-            // Use strokeRect with (x, y, width, height)
             ctx.strokeRect(shape.x , shape.y , shape.width , shape.height);
+            ctx.beginPath();
+        }
+        else if (shape.type === "circle") {
+            ctx.beginPath();
+            ctx.strokeStyle = "rgba(255, 255, 255)";
+            ctx.arc(shape.centerx, shape.centery, shape.radius, 0, 2 * Math.PI);
+            ctx.stroke();
+            ctx.beginPath();
         }
     });
 }
