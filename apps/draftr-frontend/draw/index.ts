@@ -1,6 +1,5 @@
 import axios from "axios";
 import { BACKEND_URL } from "@/app/config";
-import { RocknRoll_One } from "next/font/google";
 
 type ShapeInterface = {
     type : "rect" , 
@@ -25,6 +24,9 @@ export async function initDraw(Canva : HTMLCanvasElement , roomId:string , ws:We
         return;
     }
 
+    // Initial render of existing shapes
+    ClearCanvas(ExistingShapes, ctx, Canva);
+
     if(ws)
     {
         ws.onmessage = function(event : MessageEvent)
@@ -34,32 +36,41 @@ export async function initDraw(Canva : HTMLCanvasElement , roomId:string , ws:We
                 const parsedData:any = JSON.parse(event.data);
                 if(parsedData.type?.trim() === "Send_Message")
                 {
-                    ExistingShapes.push(parsedData.message);
+                    const message = typeof parsedData.message === "string" 
+                        ? JSON.parse(parsedData.message) 
+                        : parsedData.message;
+                    ExistingShapes.push(message);
                     ClearCanvas(ExistingShapes , ctx , Canva);
                 }
             }
             catch(e)
             {
-                alert("Error Encountered while parsing ! : " + e);
                 console.log("Error Encountered while parsing ! : " + e);
             }
         }
     }
 
-    ctx.fillStyle = "rgba(0 , 0 , 0)";
-    ctx.fillRect(0 , 0 , Canva.width , Canva.height);
-
     let clicked = false; 
     let StartX = 0 , StartY = 0;
 
-    Canva.addEventListener("mousedown" , (e:any) => {
-        clicked=true;
+    Canva.addEventListener("mousedown" , (e: MouseEvent) => {
+        clicked = true;
+        const rect = Canva.getBoundingClientRect();
+        // Set starting points relative to the canvas
+        StartX = e.clientX - rect.left;
+        StartY = e.clientY - rect.top;
     });
 
-    Canva.addEventListener("mouseup" , (e:any) => {
-        clicked=false;
-        const height = e.clientY - StartY;
-        const width = e.clientX - StartX;
+    Canva.addEventListener("mouseup" , (e: MouseEvent) => {
+        if (!clicked) return;
+        clicked = false;
+        const rect = Canva.getBoundingClientRect();
+        const currentX = e.clientX - rect.left;
+        const currentY = e.clientY - rect.top;
+
+        const width = currentX - StartX;
+        const height = currentY - StartY;
+
         ExistingShapes.push({
             type : "rect" , 
             x : StartX , 
@@ -67,6 +78,7 @@ export async function initDraw(Canva : HTMLCanvasElement , roomId:string , ws:We
             height : height , 
             width : width
         });
+
         const payload = {
             type : "Send_Message" , 
             message : JSON.stringify({
@@ -79,44 +91,55 @@ export async function initDraw(Canva : HTMLCanvasElement , roomId:string , ws:We
             roomId : roomId
         };
         ws?.send(JSON.stringify(payload));
+        ClearCanvas(ExistingShapes, ctx, Canva);
     });
 
-    Canva.addEventListener("mousemove" , function(e:any)
+    Canva.addEventListener("mousemove" , function(e: MouseEvent)
     {
         if(clicked)
         {
-            const height = e.clientY - StartY;
-            const width = e.clientX - StartX;
+            const rect = Canva.getBoundingClientRect();
+            const currentX = e.clientX - rect.left;
+            const currentY = e.clientY - rect.top;
+            const width = currentX - StartX;
+            const height = currentY - StartY;
+
             ClearCanvas(ExistingShapes , ctx , Canva);
             ctx.strokeStyle = "rgba(255 , 255 , 255)";
-            ctx.fillRect(StartX , StartY , height , width);
+            // Use strokeRect with (x, y, width, height)
+            ctx.strokeRect(StartX , StartY , width , height);
         }
     });
 }
+
 function ClearCanvas(ExistingShapes:ShapeInterface[] , ctx : CanvasRenderingContext2D , Canva : HTMLCanvasElement)
 {
     ctx.clearRect(0 , 0 , Canva.width , Canva.height);
     ctx.fillStyle = "rgba(0 , 0 , 0)";
-    ctx.fillRect(0 , 0 , Canva.height , Canva.height);
-    ExistingShapes.map((shape) => {
+    ctx.fillRect(0 , 0 , Canva.width , Canva.height); // fixed width
+    
+    ExistingShapes.forEach((shape) => {
         if(shape.type == "rect")
         {
             ctx.strokeStyle = "rgba(255 , 255 , 255)";
-            ctx.fillRect(shape.x , shape.y , shape.height , shape.width);
+            // Use strokeRect with (x, y, width, height)
+            ctx.strokeRect(shape.x , shape.y , shape.width , shape.height);
         }
     });
 }
+
 async function getShapes(roomId : string)
 {
     const response = await axios.get(`${BACKEND_URL}/chats/${roomId}`);
     if(!response)
     {
-        return;
+        return [];
     }
-    if(response.data.chats.length != 0)
+    if(response.data?.Chats && response.data.Chats.length != 0)
     {
-        const shapes = response.data.chats.map((chats:any) => {
-            return JSON.parse(chats);
+        const shapes = response.data.Chats.map((chats:any) => {
+            const raw = chats.message !== undefined ? chats.message : chats;
+            return typeof raw === "string" ? JSON.parse(raw) : raw;
         });
         return shapes;
     }

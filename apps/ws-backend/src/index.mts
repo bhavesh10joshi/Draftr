@@ -54,7 +54,7 @@ wss.on("connection" , function connection(ws,request)
     ws.on('message',async function message(data:string)
     {
         const DataintoJson = JSON.parse(data);
-
+        console.log(DataintoJson);
         if(DataintoJson.type == "join_room")
         {
             // Join room Logic as per above schema
