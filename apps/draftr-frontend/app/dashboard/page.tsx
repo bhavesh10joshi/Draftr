@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { BACKEND_URL } from '../config';
@@ -27,6 +27,11 @@ interface RecentRoom {
   participants: number;
 }
 
+async function FetchAllRooms()
+{
+
+}
+
 export default function DashboardPage() {
   const router = useRouter();
   const [newRoomName, setNewRoomName] = useState('');
@@ -40,6 +45,11 @@ export default function DashboardPage() {
     { id: 'sprint-retro', name: 'Sprint 24 Retrospective', lastActive: '2 hours ago', participants: 2 },
     { id: 'ux-flow-wire', name: 'Auth Flow Wireframes', lastActive: 'Yesterday', participants: 1 },
   ]);
+
+  useEffect(function()
+  {
+
+  },[]);
 
   const handleCreateRoom = async (e: React.FormEvent) =>{
     setIsCreating(true);

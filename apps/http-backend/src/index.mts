@@ -181,7 +181,7 @@ app.get("/chats/:roomId" , async function(req:Request , res:Response)
             orderBy : {
                 id : "desc"
             } , 
-            take : 50
+            take : 1000
         });
         if(!Chats)
         {
@@ -229,6 +229,35 @@ app.get("/room/:slug"  , async function(req,res)
     {
         res.status(ServerErrors.InternalServerError).json({
             msg : "Internal Server Error Occurred !"
+        });
+        return;
+    }
+});
+app.get("/rooms/all" , middleware ,async  function(req:Request , res:Response)
+{   
+    try{
+        const response = await prisma.room.findMany({
+            take : 3 , 
+            orderBy :{
+                createdAt : "desc"
+            }
+        });
+        if(!response)
+        {
+            res.status(ClientErrorStatusCodes.ResourceNotFound).json({
+                msg : "Rooms not found !"
+            });
+            return;
+        }
+        res.status(SuccessStatusCodes.Success).json({
+            Rooms : response
+        });
+        return;
+    }
+    catch(e)
+    {
+        res.status(ServerErrors.InternalServerError).json({
+            msg : "Internal server Error Encountered !"
         });
         return;
     }

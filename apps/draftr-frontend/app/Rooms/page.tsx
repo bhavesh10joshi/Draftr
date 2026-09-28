@@ -1,7 +1,7 @@
 "use client";
 import { useRef, useEffect , useState} from "react";
-import { initDraw } from "@/draw";
-
+import { Game } from "@/draw/game";
+import { useRouter } from "next/navigation";
 
 interface PropsTypes {
   ws: WebSocket | undefined;
@@ -10,27 +10,40 @@ interface PropsTypes {
 
 export default function Rooms(props: PropsTypes) {
 
-    const [selectedShape , setSelectedShape] = useState("");
+    const [selectedShape , setSelectedShape] = useState("circle");
     const CanvasRef = useRef<HTMLCanvasElement>(null);
+    const[CurrentGameClass , SetCurrentGameClass] = useState<Game>();
+    const router = useRouter(); 
+
+    useEffect(() => {
+        CurrentGameClass?.setTool(selectedShape);
+    }, [selectedShape, CurrentGameClass]);
 
     useEffect(() => {
         if (CanvasRef.current) {
-        const Canva = CanvasRef.current;
-        const width = window.innerWidth;
-        const height = window.innerHeight;
+            const Canva = CanvasRef.current;
+            const width = window.innerWidth;
+            const height = window.innerHeight;
 
-        Canva.width = width;
-        Canva.height = height;
+            Canva.width = width;
+            Canva.height = height;
 
-        Canva.style.width = `${width}px`;
-        Canva.style.height = `${height}px`;
-        initDraw(Canva, props.RoomId, props.ws , selectedShape);
+            Canva.style.width = `${width}px`;
+            Canva.style.height = `${height}px`;
+           
+            const game = new Game(Canva , props.RoomId , props.ws);
+            
+            game.init();
+
+            SetCurrentGameClass(game);
+            
+            return function()
+            {
+                game.destroy();
+            }
         }
-    }, [CanvasRef , selectedShape]);
+    }, [CanvasRef]);
 
-    if (!props.ws) {
-        return <>Connecting to the WebSockets ....</>;
-    }
 
     return (
         <div className="fixed inset-0 h-screen w-screen overflow-hidden">
@@ -44,10 +57,10 @@ export default function Rooms(props: PropsTypes) {
                 Rectangle
             </button>
             <button
-            onClick={() => setSelectedShape("square")}
+            onClick={() => setSelectedShape("text")}
             className="px-3 py-2 bg-zinc-800 text-white text-sm rounded-lg shadow-md hover:bg-zinc-700 transition"
             >
-                Square
+                Text
             </button>
             <button
             onClick={() => setSelectedShape("circle")}
@@ -60,6 +73,16 @@ export default function Rooms(props: PropsTypes) {
             className="px-3 py-2 bg-zinc-800 text-white text-sm rounded-lg shadow-md hover:bg-zinc-700 transition"
             >
                 Line
+            </button>
+            <button
+            onClick={() => {
+                props.ws?.close();
+                router.push("/dashboard");
+                return;
+            }}
+            className="px-3 py-2 bg-zinc-800 text-white text-sm rounded-lg shadow-md hover:bg-zinc-700 transition"
+            >
+                Leave Room
             </button>
         </div>
         </div>

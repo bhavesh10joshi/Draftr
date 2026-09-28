@@ -27,10 +27,6 @@ export default function Playground(props: PropsTypes) {
       );
     };
 
-    socket.onerror = (err) => {
-      console.error("WebSocket connection error:", err);
-    };
-
     // Cleanup on unmount / room change
     return () => {
       if (socket.readyState === WebSocket.OPEN || socket.readyState === WebSocket.CONNECTING) {
