@@ -56,12 +56,12 @@ Think of it as a self-hosted, developer-friendly alternative to tools like Excal
 
 | Capability | Description |
 |---|---|
-| **User Authentication** | Email/password sign-up & sign-in with bcrypt-hashed passwords and JWT-based session tokens. |
-| **Room Management** | Create named rooms with unique slugs, join existing rooms by code, and list recent whiteboards. |
-| **Real-Time Drawing** | Draw rectangles, circles, lines, and text on an HTML5 Canvas with live preview while dragging. |
-| **Instant Sync** | Every shape drawn by one user is broadcast to all other users in the same room via WebSockets in real time. |
-| **Persistent Canvas** | All shapes are stored as serialized JSON messages in the database, so the canvas is fully restored when re-joining a room. |
-| **Real-Time Chat** | Send and receive text messages within a room, persisted to PostgreSQL for chat history retrieval. |
+| **User Authentication** | Email/password sign-up & sign-in with bcrypt-hashed passwords and JWT-based session tokens. Logout clears the JWT from localStorage. |
+| **Room Management** | Create named rooms with unique slugs, join existing rooms by code, and browse all existing whiteboards with admin details. |
+| **Real-Time Drawing** | Draw rectangles, circles, lines, and text on an HTML5 Canvas with live preview while dragging. Each shape is assigned a **random color** for visual distinction. |
+| **Instant Sync** | Every shape drawn by one user is broadcast to all users in the same room via WebSockets (`Send_Message`) in real time. |
+| **Persistent Canvas** | All shapes (with color metadata) are stored as serialized JSON messages in the database, so the canvas is fully restored when re-joining a room. |
+| **Real-Time Chat Sidebar** | A slide-out chat panel alongside the canvas allows users to exchange text messages in real time via a dedicated `Send_Message_chat` WebSocket event. Chat messages are broadcast to other room participants (excluding the sender). |
 | **Multi-Room Support** | A single WebSocket connection can subscribe to multiple rooms simultaneously. |
 
 ---
@@ -98,23 +98,28 @@ Developers can sketch out algorithm flowcharts, database schemas, or API contrac
 ### Room Management
 - **Create Room** — Authenticated users create a room with a unique slug name (5–15 characters). The creator becomes the room admin.
 - **Join Room** — Enter a room slug to resolve its `roomId` and join the canvas/chat.
-- **List Rooms** — Fetch the 3 most recently created rooms (paginated).
+- **List All Rooms** — Fetch all existing rooms with full admin user details (name, email) included via Prisma relation.
 - **Room Lookup** — Resolve a room slug to its full room object (id, slug, adminId, createdAt).
+- **Logout** — Clears the JWT token from `localStorage` and redirects to the landing page.
 
 ### Real-Time Canvas (Drawing Engine)
 - **Shape Tools** — Rectangle, Circle, Line, and Text tools with live preview during drag.
-- **`Game` Class** — An OOP-based drawing engine that manages canvas state, mouse event handlers, shape rendering, and WebSocket message dispatch.
-- **Shape Persistence** — Shapes are serialized as JSON strings, sent as WebSocket `Send_Message` events, and stored in the `Chat` table. On room entry, all prior shapes are fetched and re-rendered.
+- **Random Shape Colors** — Each shape is automatically assigned a random hex color on creation, providing visual distinction between different users' contributions and individual shapes.
+- **`Game` Class** — An OOP-based drawing engine that manages canvas state, mouse event handlers, shape rendering, color assignment, and WebSocket message dispatch.
+- **Shape Persistence** — Shapes (with color metadata) are serialized as JSON strings, sent as WebSocket `Send_Message` events, and stored in the `Chat` table. On room entry, all prior shapes are fetched and re-rendered with their original colors.
 - **Canvas Resize** — Automatic full-viewport canvas sizing with proper coordinate mapping via `getBoundingClientRect()`.
 
 ### Real-Time Communication (WebSocket)
 - **Connection** — Clients connect to `ws://localhost:8000?token=<JWT>` and are authenticated server-side.
 - **Room Subscription** — Clients send `join_room` / `Leave_Room` messages to subscribe/unsubscribe from room broadcasts.
-- **Message Broadcast** — `Send_Message` events are broadcast to every client in the same room and persisted to the database.
+- **Canvas Broadcast (`Send_Message`)** — Shape data is broadcast to **all** users in the room (including the sender) and persisted to the database.
+- **Chat Broadcast (`Send_Message_chat`)** — Text chat messages are broadcast to **all other** users in the room (excluding the sender) and are **not** persisted to the database — they are ephemeral, real-time only.
 
-### Chat System
-- **Send Messages** — Chat messages sent via WebSocket are broadcast and stored.
-- **Chat History** — REST endpoint fetches the last 1,000 messages for a room (ordered by most recent), used to hydrate the UI on room join.
+### Chat Sidebar
+- **Slide-Out Panel** — A toggleable right-side chat panel overlays the canvas, featuring sender labels, timestamps, auto-scroll, and styled message bubbles.
+- **Optimistic UI** — Sent messages appear instantly in the sender's chat without waiting for a server round-trip.
+- **Room Info** — Displays the room ID with a copy-to-clipboard button.
+- **Canvas Shape History** — REST endpoint fetches the last 1,000 shapes for a room (with sender user details included), ordered by most recent, used to hydrate the canvas on room join.
 
 ---
 
@@ -169,8 +174,8 @@ Developers can sketch out algorithm flowcharts, database schemas, or API contrac
      │   │  • POST /signUp      │   │  • Token auth on connect ││
      │   │  • POST /signIn      │   │  • join_room             ││
      │   │  • POST /createRooms │   │  • Leave_Room            ││
-     │   │  • GET  /chats/:id   │   │  • Send_Message          ││
-     │   │  • GET  /room/:slug  │   │  (broadcast + persist)   ││
+     │   │  • GET  /chats/:id   │   │  • Send_Message (canvas) ││
+     │   │  • GET  /room/:slug  │   │  • Send_Message_chat     ││
      │   │  • GET  /rooms/all   │   │                          ││
      │   └──────────┬───────────┘   └──────────┬──────────────┘│
      │              │                           │               │
@@ -218,22 +223,23 @@ Client connects → ws://localhost:8000?token=<JWT>
          ▼
     ws.on("message")
          │
-    ┌────┴────────────────────┐──────────────────────┐
-    │                         │                      │
-    ▼                         ▼                      ▼
-"join_room"             "Leave_Room"          "Send_Message"
-    │                         │                      │
-    ▼                         ▼                      ▼
-Add roomId to           Remove roomId         1. Broadcast message
-user's rooms[]          from rooms[]             to all users in room
-                                              2. prisma.chat.create()
-                                                 (persist to DB)
+    ┌────┴──────────────┬──────────────────┬──────────────────────┐
+    │                   │                  │                      │
+    ▼                   ▼                  ▼                      ▼
+"join_room"       "Leave_Room"      "Send_Message"         "Send_Message_chat"
+    │                   │                  │                      │
+    ▼                   ▼                  ▼                      ▼
+Add roomId to     Remove roomId     1. Broadcast to ALL     Broadcast to OTHER
+user's rooms[]    from rooms[]         users in room         users in room
+                                    2. prisma.chat.create() (sender excluded,
+                                       (persist to DB)       NOT persisted)
 ```
 
 **Key Design Decisions:**
 - **In-memory user store** — Active connections are tracked in a `Users[]` array with their socket reference, userId, and subscribed room IDs.
 - **Fan-out broadcast** — On `Send_Message`, the server iterates all users, checks if their `rooms[]` includes the target `roomId`, and sends via their WebSocket.
-- **Dual-write** — Messages are both broadcast and persisted to PostgreSQL in the same handler for consistency.
+- **Dual-write for canvas** — Canvas shape messages (`Send_Message`) are both broadcast and persisted to PostgreSQL in the same handler for consistency.
+- **Ephemeral chat** — Chat text messages (`Send_Message_chat`) are broadcast to other participants but **not** saved to the database, keeping them lightweight and real-time only. The sender is excluded from the broadcast (the client optimistically adds the message to its own UI).
 
 ---
 
@@ -254,9 +260,9 @@ The Express server handles RESTful operations: authentication, room management, 
 │  ├── POST /signUp            [Public]   → Create user          │
 │  ├── POST /signIn            [Public]   → Authenticate + JWT   │
 │  ├── POST /app/createRooms   [Auth]     → Create room          │
-│  ├── GET  /chats/:roomId     [Public]   → Fetch chat history   │
+│  ├── GET  /chats/:roomId     [Public]   → Fetch shapes + user  │
 │  ├── GET  /room/:slug        [Public]   → Resolve slug → room  │
-│  └── GET  /rooms/all         [Auth]     → List recent rooms    │
+│  └── GET  /rooms/all         [Public]   → List all rooms+admin │
 │                                                                │
 │  Auth Middleware Flow:                                          │
 │  req.headers["authorization"] → jwt.verify() → req.UserId      │
@@ -322,14 +328,17 @@ Landing Page (/)
                      ├── WebSocket connect (WS_URL?token=JWT)
                      ├── Send join_room { roomId }
                      │
-                     └── Rooms Component (Canvas)
+                     └── Rooms Component (Canvas + Chat Sidebar)
                           │
                           ├── Game class instantiation
                           ├── Fetch existing shapes (GET /chats/:roomId)
-                          ├── Render shapes on Canvas
+                          ├── Render shapes on Canvas (with colors)
                           ├── Mouse event handlers (draw + preview)
-                          ├── WebSocket send (shape data)
-                          └── WebSocket receive (render incoming shapes)
+                          ├── WebSocket send (shape data via Send_Message)
+                          ├── WebSocket receive (render incoming shapes)
+                          ├── Chat sidebar (send/receive via Send_Message_chat)
+                          ├── Room ID copy-to-clipboard
+                          └── Leave Room → close WS → redirect to /dashboard
 ```
 
 **Drawing Engine (`Game` class):**
@@ -337,7 +346,14 @@ Landing Page (/)
 - Maintains an `ExistingShapes[]` array as the source of truth.
 - On every shape addition (local draw or remote receive), the canvas is fully cleared and all shapes are re-rendered (immediate-mode rendering).
 - Supports: `rect`, `circle`, `line`, and `text` shape types.
-- Text tool spawns a temporary `<input>` element overlay on the canvas for inline editing.
+- **Random color assignment** — Each shape is given a randomly generated hex color (`getRandomColor()`) on creation. A `currentPreviewColor` is set on `mousedown` and reused for the live preview and final shape.
+- Text tool spawns a temporary `<input>` element overlay on the canvas for inline editing, styled with its random color.
+
+**Chat Sidebar:**
+- Listens for `Send_Message_chat` events via `addEventListener` (not `onmessage`) to avoid conflicting with the Game engine's WebSocket handler.
+- Messages are displayed with sender labels ("You" vs "Participant"), timestamps, and styled bubble layout.
+- Optimistic updates: sent messages appear instantly without server confirmation.
+- Room ID displayed with a one-click copy button.
 
 ---
 
@@ -413,12 +429,14 @@ erDiagram
 
 ### Shape Message Formats (stored in `Chat.message`)
 
+All shapes now include an optional `color` field (hex string, e.g. `"#A3F29C"`) for random color rendering.
+
 | Shape | JSON Structure |
 |---|---|
-| **Rectangle** | `{ "type": "rect", "x": 100, "y": 50, "width": 200, "height": 150 }` |
-| **Circle** | `{ "type": "circle", "centerx": 300, "centery": 200, "radius": 80 }` |
-| **Line** | `{ "type": "line", "startX": 10, "startY": 20, "endX": 300, "endY": 400 }` |
-| **Text** | `{ "type": "text", "content": "Hello", "x": 50, "y": 100, "fontSize": 20, "fontFamily": "sans-serif" }` |
+| **Rectangle** | `{ "type": "rect", "x": 100, "y": 50, "width": 200, "height": 150, "color": "#A3F29C" }` |
+| **Circle** | `{ "type": "circle", "centerx": 300, "centery": 200, "radius": 80, "color": "#FF6B2A" }` |
+| **Line** | `{ "type": "line", "startX": 10, "startY": 20, "endX": 300, "endY": 400, "color": "#3B82F6" }` |
+| **Text** | `{ "type": "text", "content": "Hello", "x": 50, "y": 100, "fontSize": 20, "fontFamily": "sans-serif", "color": "#E040FB" }` |
 
 ---
 
@@ -438,7 +456,7 @@ draftr/
 │   │   │   ├── dashboard/page.tsx    #   Dashboard: create/join rooms, recent boards
 │   │   │   ├── canvas/[slug]/page.tsx#   Server component: resolve slug → Playground
 │   │   │   ├── Playground/page.tsx   #   WebSocket connection + room join orchestrator
-│   │   │   ├── Rooms/page.tsx        #   Canvas component with Game engine + toolbar
+│   │   │   ├── Rooms/page.tsx        #   Canvas + floating toolbar + chat sidebar
 │   │   │   └── Components/          #   Shared UI components
 │   │   ├── draw/
 │   │   │   ├── index.ts             #   Functional drawing API (legacy)
@@ -625,15 +643,15 @@ pnpm exec turbo dev --filter=ws-backend
 |---|---|---|---|---|
 | `POST` | `/signUp` | `{ email, name, password }` | `201` — `{ msg }` | Create a new user account |
 | `POST` | `/signIn` | `{ email, password }` | `200` — `{ token }` | Authenticate and receive JWT |
-| `GET` | `/chats/:roomId` | — | `200` — `{ Chats[] }` | Fetch last 1000 messages for a room |
+| `GET` | `/chats/:roomId` | — | `200` — `{ Chats[] }` | Fetch last 1000 shapes for a room (includes sender `users` relation) |
 | `GET` | `/room/:slug` | — | `200` — `{ room }` | Resolve a room slug to its full object |
+| `GET` | `/rooms/all` | — | `200` — `{ Rooms[] }` | List all rooms with full `admin` user details included |
 
 ### Authenticated Endpoints (requires `Authorization` header with JWT)
 
 | Method | Endpoint | Body | Response | Description |
 |---|---|---|---|---|
 | `POST` | `/app/createRooms` | `{ RoomName }` | `200` — `{ data: roomId }` | Create a new room |
-| `GET` | `/rooms/all` | — | `200` — `{ Rooms[] }` | List 3 most recent rooms |
 
 ---
 
@@ -648,18 +666,24 @@ pnpm exec turbo dev --filter=ws-backend
 // Leave a room
 { "type": "Leave_Room", "roomId": "<room-uuid>" }
 
-// Send a message (text chat or serialized shape)
-{ "type": "Send_Message", "message": "<string>", "roomId": "<room-uuid>" }
+// Send a canvas shape (persisted to DB, broadcast to ALL in room including sender)
+{ "type": "Send_Message", "message": "<JSON-stringified-shape>", "roomId": "<room-uuid>" }
+
+// Send a chat text message (NOT persisted, broadcast to OTHERS in room excluding sender)
+{ "type": "Send_Message_chat", "message": "<string>", "roomId": "<room-uuid>" }
 ```
 
 ### Server → Client
 
 ```jsonc
-// Broadcast received message to all room subscribers
-{ "type": "Send_Message", "message": "<string>" }
+// Canvas shape broadcast (to all room subscribers)
+{ "type": "Send_Message", "message": "<JSON-stringified-shape>" }
+
+// Chat message broadcast (to all room subscribers except sender)
+{ "type": "Send_Message_chat", "message": "<string>", "roomId": "<room-uuid>" }
 ```
 
-> **Note:** The `message` field for shapes is a **JSON-stringified** shape object (e.g., `"{\"type\":\"rect\",\"x\":10,...}"`). The client parses this string to reconstruct the shape.
+> **Note:** The `message` field for shapes (`Send_Message`) is a **JSON-stringified** shape object with a `color` property (e.g., `"{\"type\":\"rect\",\"x\":10,\"color\":\"#A3F29C\",...}"`). The client parses this string to reconstruct the shape. Chat messages (`Send_Message_chat`) are plain text strings.
 
 ---
 

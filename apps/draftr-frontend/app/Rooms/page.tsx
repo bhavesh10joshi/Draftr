@@ -3,8 +3,6 @@ import { useRef, useEffect, useState } from "react";
 import { Game } from "@/draw/game";
 import { useRouter } from "next/navigation";
 import { MessageSquare, X, Send, Copy, Check, LogOut, Square, Circle, Minus, Type } from "lucide-react";
-import axios from "axios";
-import { BACKEND_URL } from "../config";
 
 interface PropsTypes {
   ws: WebSocket | undefined;
@@ -13,12 +11,11 @@ interface PropsTypes {
 }
 
 interface ChatMessage {
-  id: string;
-  sender: string;
-  text: string;
-  time: string;
+  id?: string;
+  sender?: string;
+  text?: string;
+  time?: string;
 }
-
 
 export default function Rooms(props: PropsTypes) {
   const [selectedShape, setSelectedShape] = useState("circle");
@@ -34,7 +31,6 @@ export default function Rooms(props: PropsTypes) {
   const chatBottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-
     CurrentGameClass?.setTool(selectedShape);
   }, [selectedShape, CurrentGameClass]);
 
@@ -62,19 +58,22 @@ export default function Rooms(props: PropsTypes) {
     }
   }, [props.RoomId, props.ws]);
 
-  // Listen to WebSocket messages for Chat
+  // Listen to WebSocket messages for Chat (FIXED: Proper cleanup & dependencies)
   useEffect(() => {
-    if (!props.ws) return;
+    const ws = props.ws;
+    if (!ws) return;
 
-    const handleMessage = (event: MessageEvent) => {
+    const handleWsMessage = (event: MessageEvent) => {
       try {
         const data = JSON.parse(event.data);
-        if (data.type === "chat") {
+        
+        // Ensure message corresponds to chat event
+        if (data.type?.trim() === "Send_Message_chat") {
           setMessages((prev) => [
             ...prev,
             {
-              id: Math.random().toString(36).substr(2, 9),
-              sender: data.sender || "User",
+              id: data.id || Math.random().toString(36).substr(2, 9),
+              sender: data.sender || "Participant",
               text: data.message,
               time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
             },
@@ -85,11 +84,13 @@ export default function Rooms(props: PropsTypes) {
       }
     };
 
-    props.ws.addEventListener("message", handleMessage);
+    ws.addEventListener("message", handleWsMessage);
+
+    // CLEANUP: Remove event listener when unmounted or when ws changes
     return () => {
-      props.ws?.removeEventListener("message", handleMessage);
+      ws.removeEventListener("message", handleWsMessage);
     };
-  }, [props.ws]);
+  }, [props.ws]); // Removed `messages` from dependency array!
 
   // Auto scroll chat to bottom
   useEffect(() => {
@@ -102,10 +103,15 @@ export default function Rooms(props: PropsTypes) {
     if (!inputMessage.trim() || !props.ws) return;
 
     const payload = {
-      type: "chat",
-      roomId: props.RoomId,
+      type: "Send_Message_chat",
       message: inputMessage.trim(),
+      roomId: props.RoomId, // Included RoomId so WebSocket backend knows where to route
     };
+
+    if (props.ws.readyState !== WebSocket.OPEN) {
+      console.log("WebSocket is not connected");
+      return;
+    }
 
     props.ws.send(JSON.stringify(payload));
 
@@ -139,7 +145,7 @@ export default function Rooms(props: PropsTypes) {
       {/* Canvas */}
       <canvas ref={CanvasRef} className="block touch-none" />
 
-      {/* Floating Toolbar (Center Bottom) */}
+      {/* Floating Toolbar */}
       <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-10 flex items-center gap-1.5 p-1.5 bg-zinc-900/90 backdrop-blur-md border border-zinc-800 rounded-xl shadow-2xl">
         <button
           onClick={() => setSelectedShape("rect")}
@@ -179,7 +185,7 @@ export default function Rooms(props: PropsTypes) {
         </button>
       </div>
 
-      {/* Sidebar Toggle Button (Top Right) */}
+      {/* Sidebar Toggle Button */}
       <button
         onClick={() => setIsSidebarOpen(!isSidebarOpen)}
         className="absolute top-4 right-4 z-20 flex items-center gap-2 px-3.5 py-2.5 bg-zinc-900/90 backdrop-blur-md border border-zinc-800 text-zinc-200 rounded-xl shadow-lg hover:bg-zinc-800 transition"

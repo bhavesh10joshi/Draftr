@@ -145,7 +145,7 @@ const config = {
       "value": "prisma-client-js"
     },
     "output": {
-      "value": "C:\\Users\\joshb\\OneDrive\\Desktop\\mern\\myproject\\packages\\Database\\src\\generated\\client",
+      "value": "C:\\Users\\joshb\\OneDrive\\Desktop\\mern\\draftr\\packages\\Database\\src\\generated\\client",
       "fromEnvVar": null
     },
     "config": {
@@ -159,7 +159,7 @@ const config = {
       }
     ],
     "previewFeatures": [],
-    "sourceFilePath": "C:\\Users\\joshb\\OneDrive\\Desktop\\mern\\myproject\\packages\\Database\\prisma\\schema.prisma",
+    "sourceFilePath": "C:\\Users\\joshb\\OneDrive\\Desktop\\mern\\draftr\\packages\\Database\\prisma\\schema.prisma",
     "isCustomOutput": true
   },
   "relativeEnvPaths": {

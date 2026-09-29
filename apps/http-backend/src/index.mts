@@ -178,6 +178,9 @@ app.get("/chats/:roomId" , async function(req:Request , res:Response)
             where : {
                 roomId : roomId
             },
+            include:{
+                users : true
+            },
             orderBy : {
                 id : "desc"
             } , 

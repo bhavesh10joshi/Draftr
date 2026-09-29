@@ -5,7 +5,7 @@ import {prisma} from "@repo/database/db"
 
 const wss = new WebSocketServer({port : 8000} , function()
 {
-    console.log("Ws is listening on port 8080");
+    console.log("Ws is listening on port 8000");
     return;
 });
 
@@ -43,9 +43,14 @@ wss.on("connection" , function connection(ws,request)
         type : "Leave_Room" ,
         roomId : "abcdef123"
         }
-        when sending a message then schema -> {
-        type : "Send_Message",
+        when sending a message for chatting then schema -> {
+        type : "Send_Message_chat",
         message : "your message that you want to send" , 
+        roomId : "something"
+        }
+        when sending a canvas coordinates for chatting then schema -> {
+        type : "Send_Message",
+        message : "actual canvas coordinates" , 
         roomId : "abcdef"
         }
     */
@@ -108,7 +113,23 @@ wss.on("connection" , function connection(ws,request)
             });
             return;
         }
-
+        else if(DataintoJson.type == "Send_Message_chat")
+        {
+            const message = DataintoJson.message;
+            const RoomId = DataintoJson.roomId;
+            Users = Users.map((users)=>{
+                if(users.rooms.includes(RoomId) && users.ws != ws)
+                {
+                    users.ws.send(JSON.stringify({
+                        type : "Send_Message_chat" , 
+                        message : message , 
+                        roomId : RoomId
+                    }));  
+                }
+                return users;
+            }); 
+            return;
+        }
     });
 
 });
