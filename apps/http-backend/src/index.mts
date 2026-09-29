@@ -211,7 +211,8 @@ app.get("/room/:slug"  , async function(req,res)
         const room = await prisma.room.findFirst({
             where:{
                 slug : slug
-            }
+            },
+            take : 5
         });
         if(!room)
         {
@@ -233,16 +234,16 @@ app.get("/room/:slug"  , async function(req,res)
         return;
     }
 });
-app.get("/rooms/all" , middleware ,async  function(req:Request , res:Response)
+// api endpoint for getting details for all the rooms
+app.get("/rooms/all" , async  function(req:Request , res:Response)
 {   
     try{
-        const response = await prisma.room.findMany({
-            take : 3 , 
-            orderBy :{
-                createdAt : "desc"
-            }
+        const rooms = await prisma.room.findMany({
+            include: {
+            admin: true, // Includes the full User object for the admin
+            },
         });
-        if(!response)
+        if(!rooms)
         {
             res.status(ClientErrorStatusCodes.ResourceNotFound).json({
                 msg : "Rooms not found !"
@@ -250,7 +251,7 @@ app.get("/rooms/all" , middleware ,async  function(req:Request , res:Response)
             return;
         }
         res.status(SuccessStatusCodes.Success).json({
-            Rooms : response
+            Rooms : rooms
         });
         return;
     }

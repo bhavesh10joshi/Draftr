@@ -10,26 +10,28 @@ import {
   Plus, 
   DoorOpen, 
   Clock, 
-  Users, 
-  ExternalLink, 
-  Sparkles, 
   Layers, 
   LogOut,
   Hash,
   ChevronRight,
-  ArrowRight
+  ArrowRight,
+  Sparkles
 } from 'lucide-react';
 
-interface RecentRoom {
-  id: string;
-  name: string;
-  lastActive: string;
-  participants: number;
+interface Room {
+  id: string | number;
+  slug: string;
+  lastActive?: string;
 }
 
-async function FetchAllRooms()
-{
-
+async function GetRooms(): Promise<Room[]> {
+  try {
+    const response = await axios.get(`${BACKEND_URL}/rooms/all`);
+    return response.data?.Rooms || response.data || [];
+  } catch (e) {
+    console.error("Error fetching rooms:", e);
+    return [];
+  }
 }
 
 export default function DashboardPage() {
@@ -38,56 +40,42 @@ export default function DashboardPage() {
   const [joinRoomCode, setJoinRoomCode] = useState('');
   const [isCreating, setIsCreating] = useState(false);
   const [isJoining, setIsJoining] = useState(false);
+  const [recentRooms, setRecentRooms] = useState<Room[]>([]);
 
-  // Mock list of previously visited rooms
-  const [recentRooms] = useState<RecentRoom[]>([
-    { id: 'arch-sys-3', name: 'System Architecture Design', lastActive: '10 mins ago', participants: 4 },
-    { id: 'sprint-retro', name: 'Sprint 24 Retrospective', lastActive: '2 hours ago', participants: 2 },
-    { id: 'ux-flow-wire', name: 'Auth Flow Wireframes', lastActive: 'Yesterday', participants: 1 },
-  ]);
-
-  useEffect(function()
-  {
-
-  },[]);
-
-  const handleCreateRoom = async (e: React.FormEvent) =>{
-    setIsCreating(true);
-    try
-    {
-        const token = localStorage.getItem("token");
-        const payload = {
-            RoomName : newRoomName
-        };   
-        const response = await axios.post( `${BACKEND_URL}/app/createRooms` , payload , {
-            headers: {
-                'authorization': token
-            }
-        });
-        if(!response)
-        {
-            setIsCreating(false);
-            alert("Problem Encountered !");
-            return;
-        }
-        setIsCreating(false);
-        router.push(`/canvas/${newRoomName}`)
-        return;
+  useEffect(() => {
+    async function fetchAllRooms() {
+      const rooms = await GetRooms();
+      setRecentRooms(Array.isArray(rooms) ? rooms : []);
     }
-    catch(e)
-    {
-        alert("Problem Encountered !" + e);
-        setIsCreating(false);
-        return;
+    fetchAllRooms();
+  }, []);
+
+  const handleCreateRoom = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsCreating(true);
+    try {
+      const token = localStorage.getItem("token");
+      const payload = { RoomName: newRoomName };   
+      const response = await axios.post(`${BACKEND_URL}/app/createRooms`, payload, {
+        headers: {
+          'authorization': token || ''
+        }
+      });
+      setIsCreating(false);
+      
+      const targetRoom = response.data?.room?.slug || newRoomName;
+      router.push(`/canvas/${targetRoom}`);
+    } catch (e) {
+      alert("Problem Encountered! " + e);
+      setIsCreating(false);
     }
   };
 
   const handleJoinRoom = (e: React.FormEvent) => {
     e.preventDefault();
-
+    if (!joinRoomCode.trim()) return;
     setIsJoining(true);
-    router.push(`/canvas/${joinRoomCode}`);
-    return;
+    router.push(`/canvas/${joinRoomCode.trim()}`);
   };
 
   return (
@@ -116,9 +104,14 @@ export default function DashboardPage() {
             </div>
 
             <Link
-              href="/signin"
+              href="/"
               className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-border text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
               title="Sign Out"
+              onClick={() => {
+                localStorage.removeItem("token");
+                router.push("/");
+                return;
+              }}
             >
               <LogOut className="h-4 w-4" />
             </Link>
@@ -145,7 +138,7 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        {/* Action Cards: Create Room vs Join Room */}
+        {/* Action Cards */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-14">
           {/* Card 1: Create a Room */}
           <div className="relative rounded-2xl border border-border bg-card p-6 sm:p-8 shadow-sm transition hover:shadow-md">
@@ -162,7 +155,7 @@ export default function DashboardPage() {
             <form onSubmit={handleCreateRoom} className="mt-6 space-y-4">
               <div>
                 <label htmlFor="room-name" className="block text-xs font-semibold text-foreground uppercase tracking-wider mb-2">
-                  Room Name (Optional)
+                  Room Name
                 </label>
                 <input
                   id="room-name"
@@ -210,7 +203,7 @@ export default function DashboardPage() {
                     id="room-code"
                     type="text"
                     required
-                    placeholder="e.g. 7fd92a or full link"
+                    placeholder="e.g. 7fd92a or room-name"
                     value={joinRoomCode}
                     onChange={(e) => setJoinRoomCode(e.target.value)}
                     className="w-full h-11 rounded-xl border border-input bg-background pl-9 pr-3.5 text-sm text-foreground outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20 placeholder:text-muted-foreground"
@@ -232,54 +225,59 @@ export default function DashboardPage() {
 
         {/* Recent Active Canvases Section */}
         <div>
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-2">
-              <Layers className="h-4 w-4 text-primary" />
-              <h3 className="text-lg font-bold tracking-tight text-foreground">
-                Recent Whiteboards
-              </h3>
-            </div>
-            <span className="text-xs text-muted-foreground">{recentRooms.length} boards available</span>
-          </div>
-
-          <div className="rounded-2xl border border-border bg-card overflow-hidden shadow-sm">
-            <div className="divide-y divide-border">
-              {recentRooms.map((room) => (
-                <div
-                  key={room.id}
-                  onClick={() => router.push(`/room/${room.id}`)}
-                  className="flex items-center justify-between p-4 sm:px-6 hover:bg-secondary/40 transition-colors cursor-pointer group"
-                >
-                  <div className="flex items-center gap-4">
-                    <div className="h-10 w-10 shrink-0 rounded-lg bg-secondary flex items-center justify-center text-muted-foreground group-hover:text-primary group-hover:bg-primary/10 transition-colors">
-                      <Pencil className="h-4 w-4" />
-                    </div>
-                    <div>
-                      <h4 className="text-sm font-semibold text-foreground group-hover:text-primary transition-colors">
-                        {room.name}
-                      </h4>
-                      <div className="flex items-center gap-3 text-xs text-muted-foreground mt-0.5">
-                        <span className="font-mono">#{room.id}</span>
-                        <span>•</span>
-                        <span className="flex items-center gap-1">
-                          <Clock className="h-3 w-3" />
-                          {room.lastActive}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-4">
-                    <div className="hidden sm:flex items-center gap-1.5 text-xs text-muted-foreground bg-secondary/50 px-2.5 py-1 rounded-md">
-                      <Users className="h-3 w-3" />
-                      <span>{room.participants} active</span>
-                    </div>
-                    <ChevronRight className="h-4 w-4 text-muted-foreground group-hover:text-foreground group-hover:translate-x-0.5 transition" />
-                  </div>
+          {recentRooms.length > 0 ? (
+            <div>
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-2">
+                  <Layers className="h-4 w-4 text-primary" />
+                  <h3 className="text-lg font-bold tracking-tight text-foreground">
+                    Recent Whiteboards
+                  </h3>
                 </div>
-              ))}
+                <span className="text-xs text-muted-foreground">{recentRooms.length} boards available</span>
+              </div>
+
+              <div className="rounded-2xl border border-border bg-card overflow-hidden shadow-sm">
+                <div className="divide-y divide-border">
+                  {recentRooms.map((room) => (
+                    <div
+                      key={room.id}
+                      onClick={() => router.push(`/canvas/${room.slug}`)}
+                      className="flex items-center justify-between p-4 sm:px-6 hover:bg-secondary/40 transition-colors cursor-pointer group"
+                    >
+                      <div className="flex items-center gap-4">
+                        <div className="h-10 w-10 shrink-0 rounded-lg bg-secondary flex items-center justify-center text-muted-foreground group-hover:text-primary group-hover:bg-primary/10 transition-colors">
+                          <Pencil className="h-4 w-4" />
+                        </div>
+                        <div>
+                          <h4 className="text-sm font-semibold text-foreground group-hover:text-primary transition-colors">
+                            {room.slug}
+                          </h4>
+                          <div className="flex items-center gap-3 text-xs text-muted-foreground mt-0.5">
+                            <span className="font-mono">#{room.id}</span>
+                            {room.lastActive && (
+                              <>
+                                <span>•</span>
+                                <span className="flex items-center gap-1">
+                                  <Clock className="h-3 w-3" />
+                                  {room.lastActive}
+                                </span>
+                              </>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                      <ChevronRight className="h-4 w-4 text-muted-foreground group-hover:text-foreground transition-colors" />
+                    </div>
+                  ))}
+                </div>
+              </div>
             </div>
-          </div>
+          ) : (
+            <div className="text-center py-10 text-muted-foreground text-sm border border-dashed border-border rounded-2xl">
+              No recent whiteboards found. Create or join a room to get started!
+            </div>
+          )}
         </div>
       </main>
     </div>

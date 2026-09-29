@@ -7,12 +7,14 @@ type ShapeInterface =
       y: number;
       height: number;
       width: number;
+      color?: string;
     }
   | {
       type: "circle";
       centerx: number;
       centery: number;
       radius: number;
+      color?: string;
     }
   | {
       type: "line";
@@ -20,6 +22,7 @@ type ShapeInterface =
       startY: number;
       endX: number;
       endY: number;
+      color?: string;
     }
   | {
       type: "text";
@@ -28,6 +31,7 @@ type ShapeInterface =
       y: number;
       fontSize: number;
       fontFamily?: string;
+      color?: string;
     };
 
 export class Game {
@@ -40,6 +44,7 @@ export class Game {
   private startY = 0;
   private selectedTool: string;
   private activeTextInput: HTMLInputElement | null = null;
+  private currentPreviewColor: string = "#ffffff";
 
   socket: WebSocket;
 
@@ -53,6 +58,15 @@ export class Game {
     this.socket = socket;
 
     this.resizeCanvasToDisplaySize();
+  }
+
+  private getRandomColor(): string {
+    const letters = "0123456789ABCDEF";
+    let color = "#";
+    for (let i = 0; i < 6; i++) {
+      color += letters[Math.floor(Math.random() * 16)];
+    }
+    return color;
   }
 
   private resizeCanvasToDisplaySize() {
@@ -118,10 +132,12 @@ export class Game {
     this.ctx.fillStyle = "black";
     this.ctx.fillRect(0, 0, this.Canva.width, this.Canva.height);
 
-    this.ctx.strokeStyle = "white";
     this.ctx.lineWidth = 2;
 
     this.ExistingShapes.forEach((shape) => {
+      const strokeColor = shape.color || "white";
+      this.ctx.strokeStyle = strokeColor;
+
       if (shape.type === "rect") {
         this.ctx.strokeRect(shape.x, shape.y, shape.width, shape.height);
       } else if (shape.type === "circle") {
@@ -143,7 +159,7 @@ export class Game {
         const fontSize = shape.fontSize || 20;
         const fontFamily = shape.fontFamily || "sans-serif";
         this.ctx.font = `${fontSize}px ${fontFamily}`;
-        this.ctx.fillStyle = "white";
+        this.ctx.fillStyle = strokeColor;
         this.ctx.textBaseline = "top";
         this.ctx.fillText(shape.content, shape.x, shape.y);
       }
@@ -153,6 +169,7 @@ export class Game {
   private createTextInput(x: number, y: number, clientX: number, clientY: number) {
     this.removeActiveTextInput();
 
+    const color = this.getRandomColor();
     const input = document.createElement("input");
     input.type = "text";
     
@@ -162,9 +179,9 @@ export class Game {
     input.style.top = `${clientY}px`;
     input.style.fontSize = `${fontSize}px`;
     input.style.fontFamily = "sans-serif";
-    input.style.color = "white";
+    input.style.color = color;
     input.style.background = "transparent";
-    input.style.border = "1px dashed white";
+    input.style.border = `1px dashed ${color}`;
     input.style.outline = "none";
     input.style.padding = "0";
     input.style.margin = "0";
@@ -183,6 +200,7 @@ export class Game {
           y,
           fontSize,
           fontFamily: "sans-serif",
+          color,
         };
 
         this.ExistingShapes.push(shapeToSend);
@@ -231,6 +249,7 @@ export class Game {
 
     this.removeActiveTextInput();
     this.clicked = true;
+    this.currentPreviewColor = this.getRandomColor(); // Pick a new color for the shape preview
     const coords = this.getCanvasCoordinates(e);
     this.startX = coords.x;
     this.startY = coords.y;
@@ -253,6 +272,7 @@ export class Game {
         y: this.startY,
         height: height,
         width: width,
+        color: this.currentPreviewColor,
       };
     } else if (this.selectedTool === "circle") {
       const radius = Math.sqrt(width * width + height * height) / 2;
@@ -261,6 +281,7 @@ export class Game {
         radius: radius,
         centerx: this.startX + width / 2,
         centery: this.startY + height / 2,
+        color: this.currentPreviewColor,
       };
     } else if (this.selectedTool === "line") {
       shapeToSend = {
@@ -269,6 +290,7 @@ export class Game {
         startY: this.startY,
         endX: coords.x,
         endY: coords.y,
+        color: this.currentPreviewColor,
       };
     }
 
@@ -294,7 +316,7 @@ export class Game {
 
     this.ClearCanvas();
 
-    this.ctx.strokeStyle = "white";
+    this.ctx.strokeStyle = this.currentPreviewColor;
     this.ctx.lineWidth = 2;
 
     if (this.selectedTool === "rect") {

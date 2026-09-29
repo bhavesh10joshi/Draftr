@@ -25,7 +25,6 @@ model Room {
   admin     User     @relation(fields: [adminId], references: [id])
   chats     Chat[]
   createdAt DateTime @default(now())
-
 }
 
 model Chat {
